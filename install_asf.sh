@@ -1,10 +1,10 @@
 #!/bin/bash
 ###############################################################################
-#  ArchiSteamFarm 一键安装脚本（增强版）
+#  ArchiSteamFarm 一键安装脚本（简化版）
 #
 #  支持功能：
 #    - 自动检测并安装依赖
-#    - 自动获取最新 ASF 版本
+#    - 下载 ASF 6.1.7.3
 #    - 自定义安装目录 / 运行用户 / IPC 端口
 #    - 生成 ASF.json 与 IPC.config
 #    - 生成 systemd 服务单元
@@ -16,7 +16,6 @@
 #    sudo INSTALL_DIR=/opt/asf2 bash install_asf.sh
 #    sudo ASF_USER=steam bash install_asf.sh
 #    sudo ASF_PORT=1243 bash install_asf.sh
-#    sudo ASF_VERSION=6.3.10.3 bash install_asf.sh
 ###############################################################################
 
 set -Eeuo pipefail
@@ -25,9 +24,9 @@ set -Eeuo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/asf}"
 ASF_USER="${ASF_USER:-root}"
 ASF_PORT="${ASF_PORT:-1242}"
-ASF_VERSION="${ASF_VERSION:-}"
+ASF_VERSION="6.1.7.3"
 
-# ================================ 颜色输��� ====================================
+# ================================ 颜色输出 ====================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -63,34 +62,11 @@ ensure_user() {
     fi
 }
 
-get_latest_version() {
-    log_info "正在检测最新版 ASF..."
-    local latest=""
-    
-    # 尝试用 curl
-    if command -v curl >/dev/null 2>&1; then
-        latest=$(curl -fsSL "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+' | head -1) || latest=""
-    fi
-    
-    # 如果 curl 失败，尝试 wget
-    if [[ -z "${latest}" ]] && command -v wget >/dev/null 2>&1; then
-        latest=$(wget -qO- "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+' | head -1) || latest=""
-    fi
-    
-    if [[ -z "${latest}" ]]; then
-        log_error "无法获取最新版 ASF，请检查网络或手动指定 ASF_VERSION"
-        log_info "示例： sudo ASF_VERSION=6.3.10.3 bash $0"
-        exit 1
-    fi
-
-    echo "${latest#v}"
-}
-
 # ================================ 安装步骤 ====================================
 step_install_deps() {
     log_info "安装依赖..."
     apt-get update -qq
-    apt-get install -y -qq wget curl unzip openssl ca-certificates
+    apt-get install -y -qq wget unzip openssl ca-certificates
     log_ok "依赖安装完成"
 }
 
@@ -100,13 +76,13 @@ step_download() {
     local url="https://github.com/JustArchiNET/ArchiSteamFarm/releases/download/${version}/${file_name}"
 
     log_info "下载 ASF v${version}..."
+    log_info "URL: ${url}"
 
     mkdir -p "${INSTALL_DIR}"
     cd "${INSTALL_DIR}"
 
     if ! wget -q --show-progress --tries=3 --timeout=30 -O "${file_name}" "${url}"; then
-        log_error "下载失败，请检查网络或版本是否正确"
-        log_error "URL: ${url}"
+        log_error "下载失败，请检查网络或 URL 是否正确"
         rm -f "${file_name}"
         exit 1
     fi
@@ -137,7 +113,7 @@ step_create_config() {
     log_info "生成 ASF 配置..."
 
     local ipc_password
-    ipc_password="$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 20)"
+    ipc_password="$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)"
 
     mkdir -p "${INSTALL_DIR}/config"
 
@@ -248,18 +224,13 @@ print_summary() {
 main() {
     echo ""
     echo "============================================================"
-    echo "       ArchiSteamFarm 一键安装脚本（增强版）"
+    echo "       ArchiSteamFarm 一键安装脚本（简化版）"
     echo "============================================================"
     echo ""
 
     check_root
     check_os
     ensure_user
-
-    # 获取版本（仅在未指定时执行）
-    if [[ -z "${ASF_VERSION}" ]]; then
-        ASF_VERSION="$(get_latest_version)"
-    fi
 
     log_info "目标版本: v${ASF_VERSION}"
     log_info "安装目录: ${INSTALL_DIR}"
