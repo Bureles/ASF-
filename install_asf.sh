@@ -9,6 +9,7 @@
 #    - 自动生成 IPC / ASF 配置
 #    - 自动注册 systemd 服务
 #    - 支持安装 / 卸载 / 状态检查 / 启动 / 停止 / 重启
+#    - 自动配置 UFW 防火墙（可选）
 #
 #  用法：
 #    sudo bash install_asf.sh
@@ -16,6 +17,7 @@
 #    sudo ASF_USER=steam bash install_asf.sh
 #    sudo ASF_PORT=1243 bash install_asf.sh
 #    sudo ASF_PASSWORD=MyStrongPass123 bash install_asf.sh
+#    sudo ASF_OPEN_FIREWALL=yes bash install_asf.sh
 #    sudo bash install_asf.sh uninstall
 #    sudo bash install_asf.sh status
 #    sudo bash install_asf.sh start
@@ -32,6 +34,7 @@ ASF_PORT="${ASF_PORT:-1242}"
 ASF_VERSION="6.1.7.3"
 ASF_PASSWORD="${ASF_PASSWORD:-}"
 SERVICE_NAME="asf"
+ASF_OPEN_FIREWALL="${ASF_OPEN_FIREWALL:-yes}"
 
 # ================================ 颜色输出 ====================================
 RED='\033[0;31m'
@@ -60,6 +63,7 @@ show_usage() {
     echo "  ASF_USER=root"
     echo "  ASF_PORT=1242"
     echo "  ASF_PASSWORD=MyStrongPass123"
+    echo "  ASF_OPEN_FIREWALL=yes"
     exit 0
 }
 
@@ -109,6 +113,23 @@ restart_service() {
     systemctl is-active --quiet "${SERVICE_NAME}.service"
 }
 
+configure_firewall() {
+    if [[ "${ASF_OPEN_FIREWALL}" != "yes" ]]; then
+        return 0
+    fi
+
+    if command -v ufw >/dev/null 2>&1; then
+        log_info "配置 UFW 防火墙，允许 ASF 端口 ${ASF_PORT}..."
+        if ! ufw status | grep -q "Status: active"; then
+            ufw --force enable >/dev/null 2>&1 || true
+        fi
+        ufw allow "${ASF_PORT}/tcp" >/dev/null 2>&1 || true
+        log_ok "防火墙规则已添加：${ASF_PORT}/tcp"
+    else
+        log_warn "未检测到 ufw，跳过防火墙配置；可手动开放端口 ${ASF_PORT}"
+    fi
+}
+
 # ================================ 卸载功能 ====================================
 uninstall_asf() {
     log_warn "开始卸载 ArchiSteamFarm..."
@@ -128,6 +149,10 @@ uninstall_asf() {
         rm -rf "${INSTALL_DIR}"
     fi
 
+    if command -v ufw >/dev/null 2>&1; then
+        ufw delete allow "${ASF_PORT}/tcp" >/dev/null 2>&1 || true
+    fi
+
     log_ok "ArchiSteamFarm 已卸载"
     exit 0
 }
@@ -136,7 +161,7 @@ uninstall_asf() {
 step_install_deps() {
     log_info "安装依赖..."
     apt-get update -qq
-    apt-get install -y -qq wget unzip openssl ca-certificates
+    apt-get install -y -qq wget unzip openssl ca-certificates ufw
     log_ok "依赖安装完成"
 }
 
@@ -323,6 +348,8 @@ main() {
             step_create_service
             echo ""
             step_fix_permissions
+            echo ""
+            configure_firewall
             echo ""
             print_summary
 
