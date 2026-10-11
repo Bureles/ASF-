@@ -16,7 +16,7 @@
 #    sudo INSTALL_DIR=/opt/asf2 bash install_asf.sh
 #    sudo ASF_USER=steam bash install_asf.sh
 #    sudo ASF_PORT=1243 bash install_asf.sh
-#    sudo ASF_VERSION=6.1.7.3 bash install_asf.sh
+#    sudo ASF_VERSION=6.3.10.3 bash install_asf.sh
 ###############################################################################
 
 set -Eeuo pipefail
@@ -27,7 +27,7 @@ ASF_USER="${ASF_USER:-root}"
 ASF_PORT="${ASF_PORT:-1242}"
 ASF_VERSION="${ASF_VERSION:-}"
 
-# ================================ 颜色输出 ====================================
+# ================================ 颜色输��� ====================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -65,16 +65,21 @@ ensure_user() {
 
 get_latest_version() {
     log_info "正在检测最新版 ASF..."
-    local latest
-
+    local latest=""
+    
+    # 尝试用 curl
     if command -v curl >/dev/null 2>&1; then
-        latest=$(curl -fsSL "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" | grep '"tag_name"' | head -n 1 | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/') || true
-    else
-        latest=$(wget -qO- "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" | grep '"tag_name"' | head -n 1 | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/') || true
+        latest=$(curl -fsSL "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+' | head -1) || latest=""
     fi
-
+    
+    # 如果 curl 失败，尝试 wget
+    if [[ -z "${latest}" ]] && command -v wget >/dev/null 2>&1; then
+        latest=$(wget -qO- "https://api.github.com/repos/JustArchiNET/ArchiSteamFarm/releases/latest" 2>/dev/null | grep -oP '"tag_name":\s*"\K[^"]+' | head -1) || latest=""
+    fi
+    
     if [[ -z "${latest}" ]]; then
         log_error "无法获取最新版 ASF，请检查网络或手动指定 ASF_VERSION"
+        log_info "示例： sudo ASF_VERSION=6.3.10.3 bash $0"
         exit 1
     fi
 
@@ -95,13 +100,13 @@ step_download() {
     local url="https://github.com/JustArchiNET/ArchiSteamFarm/releases/download/${version}/${file_name}"
 
     log_info "下载 ASF v${version}..."
-    log_info "下载地址: ${url}"
 
     mkdir -p "${INSTALL_DIR}"
     cd "${INSTALL_DIR}"
 
     if ! wget -q --show-progress --tries=3 --timeout=30 -O "${file_name}" "${url}"; then
         log_error "下载失败，请检查网络或版本是否正确"
+        log_error "URL: ${url}"
         rm -f "${file_name}"
         exit 1
     fi
@@ -112,9 +117,19 @@ step_download() {
 step_extract() {
     log_info "解压 ASF..."
     cd "${INSTALL_DIR}"
-    unzip -qo "ASF-linux-x64.zip"
+    
+    if ! unzip -qo "ASF-linux-x64.zip"; then
+        log_error "解压失败"
+        exit 1
+    fi
+    
     rm -f "ASF-linux-x64.zip"
-    chmod +x "ArchiSteamFarm"
+    
+    if ! chmod +x "ArchiSteamFarm"; then
+        log_error "修改权限失败"
+        exit 1
+    fi
+    
     log_ok "解压完成"
 }
 
@@ -150,6 +165,7 @@ EOF
 
     echo "${ipc_password}" > "${INSTALL_DIR}/.ipc_password"
     chmod 600 "${INSTALL_DIR}/.ipc_password"
+    
     log_ok "配置生成完成"
     log_info "IPC 密码已保存到 ${INSTALL_DIR}/.ipc_password"
 }
@@ -240,6 +256,7 @@ main() {
     check_os
     ensure_user
 
+    # 获取版本（仅在未指定时执行）
     if [[ -z "${ASF_VERSION}" ]]; then
         ASF_VERSION="$(get_latest_version)"
     fi
