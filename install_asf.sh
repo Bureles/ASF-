@@ -1,15 +1,13 @@
 #!/bin/bash
 ###############################################################################
-#  ArchiSteamFarm 一键安装脚本（简化版）
+#  ArchiSteamFarm 稳定版一键安装脚本 (Ubuntu / Debian)
 #
-#  支持功能：
-#    - 自动检测并安装依赖
-#    - 下载 ASF 6.1.7.3
-#    - 自定义安装目录 / 运行用户 / IPC 端口
-#    - 生成 ASF.json 与 IPC.config
-#    - 生成 systemd 服务单元
-#    - 自动修正目录权限
-#    - 可选择是否立即启动
+#  说明：
+#    - 固定下载 ASF 6.1.7.3 版本
+#    - 不执行 GitHub API 检测，避免版本号异常或网络问题
+#    - 支持自定义安装目录 / 端口 / 运行用户
+#    - 自动生成 IPC / ASF 配置
+#    - 自动注册 systemd 服务
 #
 #  用法：
 #    sudo bash install_asf.sh
@@ -93,19 +91,19 @@ step_download() {
 step_extract() {
     log_info "解压 ASF..."
     cd "${INSTALL_DIR}"
-    
+
     if ! unzip -qo "ASF-linux-x64.zip"; then
         log_error "解压失败"
         exit 1
     fi
-    
+
     rm -f "ASF-linux-x64.zip"
-    
+
     if ! chmod +x "ArchiSteamFarm"; then
         log_error "修改权限失败"
         exit 1
     fi
-    
+
     log_ok "解压完成"
 }
 
@@ -141,7 +139,7 @@ EOF
 
     echo "${ipc_password}" > "${INSTALL_DIR}/.ipc_password"
     chmod 600 "${INSTALL_DIR}/.ipc_password"
-    
+
     log_ok "配置生成完成"
     log_info "IPC 密码已保存到 ${INSTALL_DIR}/.ipc_password"
 }
@@ -224,7 +222,7 @@ print_summary() {
 main() {
     echo ""
     echo "============================================================"
-    echo "       ArchiSteamFarm 一键安装脚本（简化版）"
+    echo "       ArchiSteamFarm 稳定版一键安装脚本"
     echo "============================================================"
     echo ""
 
